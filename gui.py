@@ -1,3 +1,4 @@
+import json
 import tkinter as tk
 from tkinter import messagebox, StringVar, ttk
 from threading import Thread
@@ -82,14 +83,15 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Исправленный стенд НС")
-
+        self.create_reports_folder()
         self.serial_handler = SerialHandler()
         self.pdf_report = PDFReport()
         self.last_report_path = ""
         self.selected_port = StringVar()
+        self.auto_connect_var = tk.BooleanVar()
 
         self.test_results = [""] * 5  # Список для хранения результатов тестов
-
+        self.load_settings()
         self.create_widgets()
 
     def create_widgets(self):
@@ -121,7 +123,9 @@ class App(tk.Tk):
         tk.Checkbutton(self, text="Исправность подключения блока проверена", variable=self.check_var).grid(row=8, column=1, sticky='w')
 
         self.auto_connect_var = tk.BooleanVar()
-        tk.Checkbutton(self, text="Автоматическое подключение", variable=self.auto_connect_var).grid(row=8, column=2, sticky='w')
+        tk.Checkbutton(self, text="Автоматическое подключение", variable=self.auto_connect_var,
+                       command=self.save_settings).grid(row=8, column=2, sticky='w')
+
 
         # Кнопки тестов с индикаторами
         self.result_vars = []
@@ -152,8 +156,38 @@ class App(tk.Tk):
         self.circle = self.connection_indicator.create_oval(10, 10, 90, 90, fill="red")
 
         # Автоматическая настройка подключения, если включена
-        if self.auto_connect_var.get():
-            self.configure_connection()
+        if self.auto_connect_var.get() and self.selected_port.get():
+            self.toggle_connection()
+
+    def create_reports_folder(self):
+        """Проверка и создание каталога для отчетов."""
+        if not os.path.exists('reports'):
+            os.makedirs('reports')
+
+    def load_settings(self):
+        """Загружает настройки подключения из JSON файла."""
+        try:
+            with open("connection_settings.json", "r") as f:
+                data = json.load(f)
+                return data
+        except FileNotFoundError:
+            return {"selected_port": "", "auto_connect": False}
+        except json.JSONDecodeError:
+            return {"selected_port": "", "auto_connect": False}
+
+    def save_settings(self):
+        """Сохраняет настройки в файл"""
+        settings = {
+            "selected_port": self.selected_port.get(),
+            "auto_connect": self.auto_connect_var.get()
+        }
+        with open("settings.json", "w") as f:
+            json.dump(settings, f)
+
+    def create_reports_folder(self):
+        """Проверка и создание каталога для отчетов."""
+        if not os.path.exists('reports'):
+            os.makedirs('reports')
 
     def update_voltage_display(self):
         """Обновление значения напряжения в реальном времени"""
@@ -169,6 +203,7 @@ class App(tk.Tk):
             except Exception as e:
                 self.voltage_display.config(text="Ошибка чтения")
         self.after(1000, self.update_voltage_display)  # Обновление каждую секунду
+
     def update_indicator(self, color):
         """Обновляет цвет индикатора подключения."""
         self.connection_indicator.itemconfig(self.circle, fill=color)
@@ -210,10 +245,36 @@ class App(tk.Tk):
 
             if response:
                 self.handle_test_response(test_number, response)
+                self.generate_report_after_test()  # Генерация отчета после теста
             else:
                 messagebox.showerror("Ошибка", "Нет ответа от устройства")
 
         Thread(target=test_operation).start()
+
+    def generate_report_after_test(self):
+        """Генерация отчета после выполнения теста"""
+        if not self.entries["ФИО оператора"].get():
+            messagebox.showerror("Ошибка", "Заполните данные оператора")
+            return
+
+        report_data = {key: entry.get() for key, entry in self.entries.items()}
+        test_results = [var.get() for var, _ in self.result_vars]
+
+        # Создание папки reports, если она не существует
+        reports_folder = "reports"
+        if not os.path.exists(reports_folder):
+            os.makedirs(reports_folder)
+
+        # Генерация отчета
+        report_path = self.pdf_report.generate(report_data["ФИО оператора"],
+                                               report_data["Объект"],
+                                               report_data["Номер блока"],
+                                               report_data["Место испытаний"],
+                                               report_data["Наименование присоединения"],
+                                               "success" if "OK" in test_results else "failure")
+
+        # Отображение сообщения о завершении
+        messagebox.showinfo("Информация", f"Отчет успешно сгенерирован!\nСохранен по пути: {report_path}")
 
     def handle_test_response(self, test_number, response):
         """Обрабатывает ответ от устройства."""
@@ -228,7 +289,7 @@ class App(tk.Tk):
                 indicator.config(bg="green")
             else:
                 result = "Неизвестный результат"
-                indicator.config(bg="yellow")
+                indicator.config(bg="grey")
 
             result_var.set(result)
         except Exception as e:
@@ -243,8 +304,10 @@ class App(tk.Tk):
     def on_port_selected(self, port):
         """Вызывается, когда порт выбран."""
         self.selected_port.set(port)
+        # Автоматически сохраняем настройки
+        self.save_settings()
 
-        # Automatically connect if the checkbox is checked
+        # Если автоподключение включено, пытаемся подключиться
         if self.auto_connect_var.get():
             self.toggle_connection()
 
