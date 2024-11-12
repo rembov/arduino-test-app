@@ -125,12 +125,13 @@ class App(tk.Tk):
         self.entries["Дата испытаний"].insert(0, datetime.now().strftime("%d.%m.%Y"))
 
         self.check_var = tk.BooleanVar()
-        tk.Checkbutton(self, text="Исправность подключения блока проверена", variable=self.check_var).grid(row=8, column=1, sticky='w')
+        tk.Checkbutton(self, text="Исправность подключения блока проверена", variable=self.check_var).grid(row=8,
+                                                                                                           column=1,
+                                                                                                           sticky='w')
 
         self.auto_connect_var = tk.BooleanVar()
         tk.Checkbutton(self, text="Автоматическое подключение", variable=self.auto_connect_var,
                        command=self.save_settings).grid(row=8, column=2, sticky='w')
-
 
         # Кнопки тестов с индикаторами
         self.result_vars = []
@@ -316,9 +317,7 @@ class App(tk.Tk):
             status_indicator.itemconfig(circle, fill="red")
 
     def configure_connection(self):
-        """Открывает окно для настройки подключения, если порт не был выбран"""
-        if not self.selected_port.get():
-            PortConfigurationWindow(master=self, on_select_port=self.on_port_selected)
+        PortConfigurationWindow(master=self, on_select_port=self.on_port_selected)
 
     def on_port_selected(self, port):
         """Вызывается, когда порт выбран."""
