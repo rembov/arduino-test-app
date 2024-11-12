@@ -89,18 +89,23 @@ class App(tk.Tk):
         self.last_report_path = ""
         self.selected_port = StringVar()
         self.auto_connect_var = tk.BooleanVar()
-
+        self.geometry("800x500")
         self.test_results = [""] * 5  # Список для хранения результатов тестов
         self.load_settings()
         self.create_widgets()
 
     def create_widgets(self):
-        # Верхняя панель с кнопками
-        tk.Button(self, text="Закрыть", command=self.quit).grid(row=0, column=0)
-        tk.Button(self, text="Настройка подключения", command=self.configure_connection).grid(row=0, column=1)
-        tk.Button(self, text="Подключить/отключить", command=self.toggle_connection).grid(row=0, column=2)
-        tk.Button(self, text="Печать отчета", command=self.print_report).grid(row=0, column=3)
-        tk.Button(self, text="Архив протоколов", command=self.open_archive).grid(row=0, column=4)
+        menu_bar = tk.Menu(self)
+        self.config(menu=menu_bar)
+
+        file_menu = tk.Menu(menu_bar, tearoff=0)
+        file_menu.add_command(label="Настройка подключения", command=self.configure_connection)
+        file_menu.add_command(label="Подключить/отключить", command=self.toggle_connection)
+        file_menu.add_command(label="Печать отчета", command=self.print_report)
+        file_menu.add_command(label="Архив протоколов", command=self.open_archive)
+        file_menu.add_separator()
+        file_menu.add_command(label="Выход", command=self.quit)
+        menu_bar.add_cascade(label="Меню", menu=file_menu)
 
         # Поля ввода
         labels = [
@@ -130,12 +135,20 @@ class App(tk.Tk):
         # Кнопки тестов с индикаторами
         self.result_vars = []
         for i in range(5):
-            tk.Button(self, text=f"Запуск теста {i + 1}", command=lambda i=i: self.start_test(i)).grid(row=9 + i, column=0)
+            tk.Button(self, text=f"Запуск теста {i + 1}", command=lambda i=i: self.start_test(i)).grid(row=9 + i,
+                                                                                                       column=0)
+
+            # Круглый индикатор статуса
+            status_indicator = tk.Canvas(self, width=20, height=20, highlightthickness=0)
+            circle = status_indicator.create_oval(2, 2, 18, 18, fill="gray")
+            status_indicator.grid(row=9 + i, column=1)
+
+            # Поле результата теста
             result_var = StringVar(value="Поле результата для теста")
-            tk.Label(self, textvariable=result_var, width=30).grid(row=9 + i, column=1)
-            status_indicator = tk.Label(self, width=2, bg="gray")
-            status_indicator.grid(row=9 + i, column=2)
-            self.result_vars.append((result_var, status_indicator))
+            tk.Label(self, textvariable=result_var, width=30).grid(row=9 + i, column=2)
+
+            # Сохраняем индикатор и переменную результата
+            self.result_vars.append((result_var, status_indicator, circle))
 
         # Напряжение сети
         tk.Label(self, text="Напряжение сети:").grid(row=14, column=0)
@@ -231,6 +244,12 @@ class App(tk.Tk):
 
     def start_test(self, test_number):
         if not all(entry.get() for entry in self.entries.values()):
+            # Подсвечиваем незаполненные поля
+            for label, entry in self.entries.items():
+                if not entry.get():
+                    entry.config(bg="red")
+                else:
+                    entry.config(bg="white")
             messagebox.showerror("Ошибка", "Заполните все обязательные поля")
             return
 
@@ -278,23 +297,23 @@ class App(tk.Tk):
 
     def handle_test_response(self, test_number, response):
         """Обрабатывает ответ от устройства."""
-        result_var, indicator = self.result_vars[test_number]
+        result_var, status_indicator, circle = self.result_vars[test_number]
 
         try:
             if "ERROR" in response:
                 result = "Ошибка"
-                indicator.config(bg="red")
+                status_indicator.itemconfig(circle, fill="red")
             elif "OK" in response:
                 result = "Успех"
-                indicator.config(bg="green")
+                status_indicator.itemconfig(circle, fill="green")
             else:
                 result = "Неизвестный результат"
-                indicator.config(bg="grey")
+                status_indicator.itemconfig(circle, fill="gray")
 
             result_var.set(result)
         except Exception as e:
             result_var.set(f"Ошибка: {e}")
-            indicator.config(bg="red")
+            status_indicator.itemconfig(circle, fill="red")
 
     def configure_connection(self):
         """Открывает окно для настройки подключения, если порт не был выбран"""
